@@ -64,7 +64,6 @@ class A3C(agent.AttributeSavingMixin, agent.AsyncAgent):
         average_value_decay=0.999,
         batch_states=batch_states,
     ):
-
         # Globally shared model
         self.shared_model = model
 
@@ -112,17 +111,19 @@ class A3C(agent.AttributeSavingMixin, agent.AsyncAgent):
     def assert_shared_memory(self):
         # Shared model must have tensors in shared memory
         for k, v in self.shared_model.state_dict().items():
-            assert v.is_shared(), "{} is not in shared memory".format(k)
+            assert v.is_shared(), "{} in shared model is not in shared memory".format(k)
 
         # Local model must not have tensors in shared memory
         for k, v in self.model.state_dict().items():
-            assert not v.is_shared(), "{} is in shared memory".format(k)
+            assert not v.is_shared(), "{} in model is in shared memory".format(k)
 
         # Optimizer must have tensors in shared memory
         for param_state in self.optimizer.state_dict()["state"].values():
             for k, v in param_state.items():
                 if isinstance(v, torch.Tensor):
-                    assert v.is_shared(), "{} is not in shared memory".format(k)
+                    assert (
+                        v.is_shared()
+                    ), "{} in optimizer is not in shared memory".format(k)
 
     @property
     def shared_attributes(self):
@@ -241,7 +242,6 @@ class A3C(agent.AttributeSavingMixin, agent.AsyncAgent):
             self._observe_eval(obs, reward, done, reset)
 
     def _act_train(self, obs):
-
         self.past_obs[self.t] = obs
 
         with torch.no_grad():
