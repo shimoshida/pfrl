@@ -1,3 +1,4 @@
+from typing import Any
 import collections
 import itertools
 import random
@@ -115,7 +116,6 @@ def _add_log_prob_and_value_to_episodes(
     obs_normalizer,
     device,
 ):
-
     dataset = list(itertools.chain.from_iterable(episodes))
 
     # Compute v_pred and next_v_pred
@@ -320,30 +320,30 @@ class PPO(agent.AttributeSavingMixin, agent.BatchAgent):
 
     def __init__(
         self,
-        model,
-        optimizer,
+        model: torch.nn.Module,
+        optimizer: torch.optim.Optimizer,
         obs_normalizer=None,
-        gpu=None,
-        gamma=0.99,
-        lambd=0.95,
+        gpu: int | None = None,
+        gamma: float = 0.99,
+        lambd: float = 0.95,
         phi=lambda x: x,
-        value_func_coef=1.0,
-        entropy_coef=0.01,
-        update_interval=2048,
-        minibatch_size=64,
-        epochs=10,
-        clip_eps=0.2,
-        clip_eps_vf=None,
-        standardize_advantages=True,
+        value_func_coef: float = 1.0,
+        entropy_coef: float = 0.01,
+        update_interval: int = 2048,
+        minibatch_size: int = 64,
+        epochs: int = 10,
+        clip_eps: float = 0.2,
+        clip_eps_vf: float = None,
+        standardize_advantages: bool = True,
         batch_states=batch_states,
-        recurrent=False,
-        max_recurrent_sequence_len=None,
-        act_deterministically=False,
-        max_grad_norm=None,
-        value_stats_window=1000,
-        entropy_stats_window=1000,
-        value_loss_stats_window=100,
-        policy_loss_stats_window=100,
+        recurrent: bool = False,
+        max_recurrent_sequence_len: int = None,
+        act_deterministically: bool = False,
+        max_grad_norm: float | None = None,
+        value_stats_window: int = 1000,
+        entropy_stats_window: int = 1000,
+        value_loss_stats_window: int = 100,
+        policy_loss_stats_window: int = 100,
     ):
         self.model = model
         self.optimizer = optimizer
@@ -400,12 +400,12 @@ class PPO(agent.AttributeSavingMixin, agent.BatchAgent):
         self.explained_variance = np.nan
         self.n_updates = 0
 
-    def _initialize_batch_variables(self, num_envs):
+    def _initialize_batch_variables(self, num_envs: int) -> None:
         self.batch_last_episode = [[] for _ in range(num_envs)]
         self.batch_last_state = [None] * num_envs
         self.batch_last_action = [None] * num_envs
 
-    def _update_if_dataset_is_ready(self):
+    def _update_if_dataset_is_ready(self) -> None:
         dataset_size = (
             sum(len(episode) for episode in self.memory)
             + len(self.last_episode)
@@ -448,7 +448,7 @@ class PPO(agent.AttributeSavingMixin, agent.BatchAgent):
             )
             self.memory = []
 
-    def _flush_last_episode(self):
+    def _flush_last_episode(self) -> None:
         if self.last_episode:
             self.memory.append(self.last_episode)
             self.last_episode = []
@@ -458,12 +458,12 @@ class PPO(agent.AttributeSavingMixin, agent.BatchAgent):
                     self.memory.append(episode)
                     self.batch_last_episode[i] = []
 
-    def _update_obs_normalizer(self, dataset):
+    def _update_obs_normalizer(self, dataset) -> None:
         assert self.obs_normalizer
         states = self.batch_states([b["state"] for b in dataset], self.device, self.phi)
         self.obs_normalizer.experience(states)
 
-    def _update(self, dataset):
+    def _update(self, dataset) -> None:
         """Update both the policy and the value function."""
 
         device = self.device
@@ -533,7 +533,6 @@ class PPO(agent.AttributeSavingMixin, agent.BatchAgent):
             self.n_updates += 1
 
     def _update_once_recurrent(self, episodes, mean_advs, std_advs):
-
         assert std_advs is None or std_advs > 0
 
         device = self.device
@@ -636,7 +635,6 @@ class PPO(agent.AttributeSavingMixin, agent.BatchAgent):
     def _lossfun(
         self, entropy, vs_pred, log_probs, vs_pred_old, log_probs_old, advs, vs_teacher
     ):
-
         prob_ratio = torch.exp(log_probs - log_probs_old)
 
         loss_policy = -torch.mean(
@@ -673,7 +671,7 @@ class PPO(agent.AttributeSavingMixin, agent.BatchAgent):
 
         return loss
 
-    def batch_act(self, batch_obs):
+    def batch_act(self, batch_obs: list[Any]) -> np.ndarray:
         if self.training:
             return self._batch_act_train(batch_obs)
         else:

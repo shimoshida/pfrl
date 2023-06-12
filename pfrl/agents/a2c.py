@@ -1,8 +1,9 @@
+from typing import Any
 import warnings
 from logging import getLogger
 
 import torch
-
+import numpy as np
 from pfrl import agent
 from pfrl.utils import clip_l2_grad_norm_
 from pfrl.utils.batch_states import batch_states
@@ -52,23 +53,23 @@ class A2C(agent.AttributeSavingMixin, agent.BatchAgent):
 
     def __init__(
         self,
-        model,
-        optimizer,
-        gamma,
-        num_processes,
-        gpu=None,
-        update_steps=5,
+        model: torch.nn.Module,
+        optimizer: torch.optim.Optimizer,
+        gamma: float,
+        num_processes: int,
+        gpu: int | None = None,
+        update_steps: int = 5,
         phi=lambda x: x,
-        pi_loss_coef=1.0,
-        v_loss_coef=0.5,
-        entropy_coeff=0.01,
-        use_gae=False,
-        tau=0.95,
-        act_deterministically=False,
-        max_grad_norm=None,
-        average_actor_loss_decay=0.999,
-        average_entropy_decay=0.999,
-        average_value_decay=0.999,
+        pi_loss_coef: float = 1.0,
+        v_loss_coef: float = 0.5,
+        entropy_coeff: float = 0.01,
+        use_gae: bool = False,
+        tau: float = 0.95,
+        act_deterministically: bool = False,
+        max_grad_norm: bool = None,
+        average_actor_loss_decay: float = 0.999,
+        average_entropy_decay: float = 0.999,
+        average_value_decay: float = 0.999,
         batch_states=batch_states,
     ):
         self.model = model
@@ -107,7 +108,7 @@ class A2C(agent.AttributeSavingMixin, agent.BatchAgent):
         self.average_value = 0
         self.average_entropy = 0
 
-    def _flush_storage(self, obs_shape, action):
+    def _flush_storage(self, obs_shape: tuple, action: torch.Tensor) -> None:
         obs_shape = obs_shape[1:]
         action_shape = action.shape[1:]
 
@@ -147,7 +148,7 @@ class A2C(agent.AttributeSavingMixin, agent.BatchAgent):
         self.obs_shape = obs_shape
         self.action_shape = action_shape
 
-    def _compute_returns(self, next_value):
+    def _compute_returns(self, next_value) -> None:
         if self.use_gae:
             self.value_preds[-1] = next_value
             gae = 0
@@ -166,7 +167,7 @@ class A2C(agent.AttributeSavingMixin, agent.BatchAgent):
                     self.rewards[i] + self.gamma * self.returns[i + 1] * self.masks[i]
                 )
 
-    def update(self):
+    def update(self) -> None:
         with torch.no_grad():
             _, next_value = self.model(self.states[-1])
             next_value = next_value[:, 0]
@@ -212,20 +213,26 @@ class A2C(agent.AttributeSavingMixin, agent.BatchAgent):
             float(dist_entropy) - self.average_entropy
         )
 
-    def batch_act(self, batch_obs):
+    def batch_act(self, batch_obs: list[Any]) -> np.ndarray:
         if self.training:
             return self._batch_act_train(batch_obs)
         else:
             return self._batch_act_eval(batch_obs)
 
-    def batch_observe(self, batch_obs, batch_reward, batch_done, batch_reset):
+    def batch_observe(
+        self,
+        batch_obs: list[Any],
+        batch_reward: list[float],
+        batch_done: list[bool],
+        batch_reset: list[bool],
+    ) -> None:
         if self.training:
             self._batch_observe_train(batch_obs, batch_reward, batch_done, batch_reset)
 
-    def _batch_act_train(self, batch_obs):
+    def _batch_act_train(self, batch_obs: list[Any]) -> np.ndarray:
         assert self.training
 
-        statevar = self.batch_states(batch_obs, self.device, self.phi)
+        statevar: torch.Tensor = self.batch_states(batch_obs, self.device, self.phi)
 
         if self.t == 0:
             with torch.no_grad():
@@ -247,9 +254,9 @@ class A2C(agent.AttributeSavingMixin, agent.BatchAgent):
 
         return action.cpu().numpy()
 
-    def _batch_act_eval(self, batch_obs):
+    def _batch_act_eval(self, batch_obs: list[Any]) -> np.ndarray:
         assert not self.training
-        statevar = self.batch_states(batch_obs, self.device, self.phi)
+        statevar: torch.Tensor = self.batch_states(batch_obs, self.device, self.phi)
         with torch.no_grad():
             pout, _ = self.model(statevar)
             if self.act_deterministically:
@@ -258,7 +265,13 @@ class A2C(agent.AttributeSavingMixin, agent.BatchAgent):
                 action = pout.sample()
         return action.cpu().numpy()
 
-    def _batch_observe_train(self, batch_obs, batch_reward, batch_done, batch_reset):
+    def _batch_observe_train(
+        self,
+        batch_obs: list[Any],
+        batch_reward: list[float],
+        batch_done: list[bool],
+        batch_reset: list[bool],
+    ) -> None:
         assert self.training
         self.t += 1
 
@@ -286,7 +299,7 @@ class A2C(agent.AttributeSavingMixin, agent.BatchAgent):
         if self.t - self.t_start == self.update_steps:
             self.update()
 
-    def get_statistics(self):
+    def get_statistics(self) -> list[tuple[str, float]]:
         return [
             ("average_actor", self.average_actor_loss),
             ("average_value", self.average_value),
